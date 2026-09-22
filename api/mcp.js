@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express from "express";
+import { z } from "zod";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, writeFile } from "node:fs/promises";
-import { z } from "zod";
+import express from "express";
 
 const app = express();
 
@@ -38,23 +38,22 @@ function createServer() {
         version: "1.0.0",
     });
 
+    // PING
     server.tool(
         "ping",
         "Test the MCP HTTP server",
         {},
-        async () => {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: "MCP HTTP server is working!",
-                    },
-                ],
-            };
-        }
+        async () => ({
+            content: [
+                {
+                    type: "text",
+                    text: "MCP HTTP server is working!",
+                },
+            ],
+        })
     );
 
-    // get todo
+    // GET TODOS
     server.tool(
         "get_todos",
         "Get all todos",
@@ -73,7 +72,7 @@ function createServer() {
         }
     );
 
-    // Add Todo
+    // ADD TODO
     server.tool(
         "add_todo",
         "Add a new todo",
@@ -106,7 +105,7 @@ function createServer() {
         }
     );
 
-    // Complete Todo
+    // COMPLETE TODO
     server.tool(
         "complete_todo",
         "Mark a todo as completed",
@@ -116,7 +115,9 @@ function createServer() {
         async ({ id }) => {
             const todos = await getTodosFromFile();
 
-            const todo = todos.find((todo) => todo.id === id);
+            const todo = todos.find(
+                (todo) => todo.id === id
+            );
 
             if (!todo) {
                 return {
@@ -144,7 +145,7 @@ function createServer() {
         }
     );
 
-    // Delete Todo
+    // DELETE TODO
     server.tool(
         "delete_todo",
         "Delete a todo",
@@ -154,7 +155,9 @@ function createServer() {
         async ({ id }) => {
             const todos = await getTodosFromFile();
 
-            const todoIndex = todos.findIndex((todo) => todo.id === id);
+            const todoIndex = todos.findIndex(
+                (todo) => todo.id === id
+            );
 
             if (todoIndex === -1) {
                 return {
@@ -184,7 +187,7 @@ function createServer() {
         }
     );
 
-    // Update Todo
+    // UPDATE TODO
     server.tool(
         "update_todo",
         "Update the title of an existing todo",
@@ -195,7 +198,9 @@ function createServer() {
         async ({ id, title }) => {
             const todos = await getTodosFromFile();
 
-            const todo = todos.find((todo) => todo.id === id);
+            const todo = todos.find(
+                (todo) => todo.id === id
+            );
 
             if (!todo) {
                 return {
@@ -227,23 +232,50 @@ function createServer() {
 }
 
 
-
-app.post("/mcp", async (req, res) => {
+// MCP ENDPOINT
+app.all("/mcp", async (req, res) => {
     const server = createServer();
 
     const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
     });
 
-    res.on("close", () => {
-        transport.close();
-        server.close();
-    });
+    try {
+        await server.connect(transport);
 
-    await server.connect(transport);
+        await transport.handleRequest(
+            req,
+            res,
+            req.body
+        );
+    } catch (error) {
+        console.error("MCP ERROR:", error);
 
-    await transport.handleRequest(req, res, req.body);
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: "MCP server error",
+                message: error.message,
+            });
+        }
+    } finally {
+        try {
+            await transport.close();
+        } catch {}
+
+        try {
+            await server.close();
+        } catch {}
+    }
 });
 
+
+// HEALTH CHECK
+app.get("/", (req, res) => {
+    res.json({
+        status: "ok",
+        server: "todo-http-server",
+        endpoint: "/api/mcp",
+    });
+});
 
 export default app;
