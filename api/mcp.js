@@ -1,43 +1,104 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const app = express();
 
 app.use(express.json());
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-const todosFile = path.join(__dirname, "..", "todos.json");
 
+const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbxoJzHgWIbMJrh27UKNzUaQX_xoQgV-JU7CMRf4xVcSK-aRSDBYZ4TOLy7CMX_d25tGUA/exec";
 
 // =========================
 // TODO FILE FUNCTIONS
 // =========================
 
-async function getTodosFromFile() {
-    try {
-        const data = await readFile(todosFile, "utf-8");
-        return JSON.parse(data);
-    } catch (error) {
-        console.error("READ TODO ERROR:", error);
-        return [];
-    }
-}
-
-async function saveTodosToFile(todos) {
-    await writeFile(
-        todosFile,
-        JSON.stringify(todos, null, 2),
-        "utf-8"
+async function getTodos() {
+    const response = await fetch(
+        `${GOOGLE_SHEET_API}?action=get`
     );
+
+    if (!response.ok) {
+        throw new Error("Google Sheet get request failed");
+    }
+
+    const data = await response.json();
+
+    return data.todos || [];
 }
 
+async function addTodo(title) {
+    const response = await fetch(GOOGLE_SHEET_API, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            action: "add",
+            title: title
+        })
+    });
+
+    const data = await response.json();
+
+    console.log("GOOGLE ADD RESPONSE:", data);
+
+    if (!response.ok || !data.success) {
+        throw new Error(
+            data.message || "Google Sheet add request failed"
+        );
+    }
+
+    return data;
+}
+
+async function completeTodo(id) {
+    const response = await fetch(GOOGLE_SHEET_API, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            action: "complete",
+            id
+        })
+    });
+
+    return await response.json();
+}
+
+async function deleteTodo(id) {
+    const response = await fetch(GOOGLE_SHEET_API, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            action: "delete",
+            id
+        })
+    });
+
+    return await response.json();
+}
+
+async function updateTodo(id, title) {
+    const response = await fetch(GOOGLE_SHEET_API, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            action: "update",
+            id,
+            title
+        })
+    });
+
+    return await response.json();
+}
 
 // =========================
 // MCP SERVER
@@ -80,15 +141,15 @@ function createServer() {
         "Get all todos",
         {},
         async () => {
-            const todos = await getTodosFromFile();
+            const todos = await getTodos();
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: JSON.stringify(todos, null, 2),
-                    },
-                ],
+                        text: JSON.stringify(todos, null, 2)
+                    }
+                ]
             };
         }
     );
@@ -102,30 +163,19 @@ function createServer() {
         "add_todo",
         "Add a new todo",
         {
-            title: z.string(),
+            title: z.string()
         },
         async ({ title }) => {
-            const todos = await getTodosFromFile();
 
-            const todo = {
-                id: todos.length
-                    ? Math.max(...todos.map(todo => todo.id)) + 1
-                    : 1,
-                title,
-                completed: false,
-            };
-
-            todos.push(todo);
-
-            await saveTodosToFile(todos);
+            const result = await addTodo(title);
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Todo added successfully: ${title}`,
-                    },
-                ],
+                        text: result.message
+                    }
+                ]
             };
         }
     );
@@ -139,35 +189,19 @@ function createServer() {
         "complete_todo",
         "Mark a todo as completed",
         {
-            id: z.number(),
+            id: z.number()
         },
         async ({ id }) => {
-            const todos = await getTodosFromFile();
 
-            const todo = todos.find(todo => todo.id === id);
-
-            if (!todo) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Todo with id ${id} not found`,
-                        },
-                    ],
-                };
-            }
-
-            todo.completed = true;
-
-            await saveTodosToFile(todos);
+            const result = await completeTodo(id);
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Todo "${todo.title}" completed successfully`,
-                    },
-                ],
+                        text: result.message
+                    }
+                ]
             };
         }
     );
@@ -181,39 +215,19 @@ function createServer() {
         "delete_todo",
         "Delete a todo",
         {
-            id: z.number(),
+            id: z.number()
         },
         async ({ id }) => {
-            const todos = await getTodosFromFile();
 
-            const todoIndex = todos.findIndex(
-                todo => todo.id === id
-            );
-
-            if (todoIndex === -1) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Todo with id ${id} not found`,
-                        },
-                    ],
-                };
-            }
-
-            const deletedTodo = todos[todoIndex];
-
-            todos.splice(todoIndex, 1);
-
-            await saveTodosToFile(todos);
+            const result = await deleteTodo(id);
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Todo "${deletedTodo.title}" deleted successfully`,
-                    },
-                ],
+                        text: result.message
+                    }
+                ]
             };
         }
     );
@@ -225,42 +239,25 @@ function createServer() {
 
     server.tool(
         "update_todo",
-        "Update the title of an existing todo",
+        "Update the title of a todo",
         {
             id: z.number(),
-            title: z.string(),
+            title: z.string()
         },
         async ({ id, title }) => {
-            const todos = await getTodosFromFile();
 
-            const todo = todos.find(todo => todo.id === id);
-
-            if (!todo) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Todo with id ${id} not found`,
-                        },
-                    ],
-                };
-            }
-
-            todo.title = title;
-
-            await saveTodosToFile(todos);
+            const result = await updateTodo(id, title);
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Todo updated successfully: ${title}`,
-                    },
-                ],
+                        text: result.message
+                    }
+                ]
             };
         }
     );
-
 
     return server;
 }
