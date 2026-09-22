@@ -270,7 +270,7 @@ function createServer() {
 // MCP ENDPOINT
 // =========================
 
-app.all("/", async (req, res) => {
+app.all(["/", "/api/mcp"], async (req, res) => {
     const server = createServer();
 
     const transport = new StreamableHTTPServerTransport({
@@ -306,7 +306,7 @@ app.all("/", async (req, res) => {
 // HEALTH CHECK
 // =========================
 
-app.get("/health", (req, res) => {
+app.get(["/health", "/api/mcp/health"], (req, res) => {
     res.json({
         status: "ok",
         server: "todo-http-server",
