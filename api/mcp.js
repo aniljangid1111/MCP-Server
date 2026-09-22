@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, writeFile } from "node:fs/promises";
-import express from "express";
 
 const app = express();
 
@@ -84,7 +84,7 @@ function createServer() {
 
             const todo = {
                 id: todos.length
-                    ? Math.max(...todos.map((todo) => todo.id)) + 1
+                    ? Math.max(...todos.map(todo => todo.id)) + 1
                     : 1,
                 title,
                 completed: false,
@@ -115,9 +115,7 @@ function createServer() {
         async ({ id }) => {
             const todos = await getTodosFromFile();
 
-            const todo = todos.find(
-                (todo) => todo.id === id
-            );
+            const todo = todos.find(todo => todo.id === id);
 
             if (!todo) {
                 return {
@@ -155,11 +153,9 @@ function createServer() {
         async ({ id }) => {
             const todos = await getTodosFromFile();
 
-            const todoIndex = todos.findIndex(
-                (todo) => todo.id === id
-            );
+            const index = todos.findIndex(todo => todo.id === id);
 
-            if (todoIndex === -1) {
+            if (index === -1) {
                 return {
                     content: [
                         {
@@ -170,9 +166,9 @@ function createServer() {
                 };
             }
 
-            const deletedTodo = todos[todoIndex];
+            const deletedTodo = todos[index];
 
-            todos.splice(todoIndex, 1);
+            todos.splice(index, 1);
 
             await saveTodosToFile(todos);
 
@@ -198,9 +194,7 @@ function createServer() {
         async ({ id, title }) => {
             const todos = await getTodosFromFile();
 
-            const todo = todos.find(
-                (todo) => todo.id === id
-            );
+            const todo = todos.find(todo => todo.id === id);
 
             if (!todo) {
                 return {
@@ -232,8 +226,8 @@ function createServer() {
 }
 
 
-// MCP ENDPOINT
-app.all("/mcp", async (req, res) => {
+// MCP endpoint
+app.all("/", async (req, res) => {
     const server = createServer();
 
     const transport = new StreamableHTTPServerTransport({
@@ -253,28 +247,23 @@ app.all("/mcp", async (req, res) => {
 
         if (!res.headersSent) {
             res.status(500).json({
-                error: "MCP server error",
-                message: error.message,
+                jsonrpc: "2.0",
+                error: {
+                    code: -32603,
+                    message: "Internal server error",
+                },
+                id: null,
             });
         }
-    } finally {
-        try {
-            await transport.close();
-        } catch {}
-
-        try {
-            await server.close();
-        } catch {}
     }
 });
 
 
-// HEALTH CHECK
-app.get("/", (req, res) => {
+// Health check
+app.get("/health", (req, res) => {
     res.json({
         status: "ok",
         server: "todo-http-server",
-        endpoint: "/api/mcp",
     });
 });
 
