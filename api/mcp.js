@@ -15,11 +15,17 @@ const __dirname = path.dirname(__filename);
 
 const todosFile = path.join(__dirname, "..", "todos.json");
 
+
+// =========================
+// TODO FILE FUNCTIONS
+// =========================
+
 async function getTodosFromFile() {
     try {
         const data = await readFile(todosFile, "utf-8");
         return JSON.parse(data);
-    } catch {
+    } catch (error) {
+        console.error("READ TODO ERROR:", error);
         return [];
     }
 }
@@ -32,28 +38,43 @@ async function saveTodosToFile(todos) {
     );
 }
 
+
+// =========================
+// MCP SERVER
+// =========================
+
 function createServer() {
     const server = new McpServer({
         name: "todo-http-server",
         version: "1.0.0",
     });
 
+
+    // =========================
     // PING
+    // =========================
+
     server.tool(
         "ping",
         "Test the MCP HTTP server",
         {},
-        async () => ({
-            content: [
-                {
-                    type: "text",
-                    text: "MCP HTTP server is working!",
-                },
-            ],
-        })
+        async () => {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: "MCP HTTP server is working!",
+                    },
+                ],
+            };
+        }
     );
 
+
+    // =========================
     // GET TODOS
+    // =========================
+
     server.tool(
         "get_todos",
         "Get all todos",
@@ -72,7 +93,11 @@ function createServer() {
         }
     );
 
+
+    // =========================
     // ADD TODO
+    // =========================
+
     server.tool(
         "add_todo",
         "Add a new todo",
@@ -105,7 +130,11 @@ function createServer() {
         }
     );
 
+
+    // =========================
     // COMPLETE TODO
+    // =========================
+
     server.tool(
         "complete_todo",
         "Mark a todo as completed",
@@ -143,7 +172,11 @@ function createServer() {
         }
     );
 
+
+    // =========================
     // DELETE TODO
+    // =========================
+
     server.tool(
         "delete_todo",
         "Delete a todo",
@@ -153,9 +186,11 @@ function createServer() {
         async ({ id }) => {
             const todos = await getTodosFromFile();
 
-            const index = todos.findIndex(todo => todo.id === id);
+            const todoIndex = todos.findIndex(
+                todo => todo.id === id
+            );
 
-            if (index === -1) {
+            if (todoIndex === -1) {
                 return {
                     content: [
                         {
@@ -166,9 +201,9 @@ function createServer() {
                 };
             }
 
-            const deletedTodo = todos[index];
+            const deletedTodo = todos[todoIndex];
 
-            todos.splice(index, 1);
+            todos.splice(todoIndex, 1);
 
             await saveTodosToFile(todos);
 
@@ -183,7 +218,11 @@ function createServer() {
         }
     );
 
+
+    // =========================
     // UPDATE TODO
+    // =========================
+
     server.tool(
         "update_todo",
         "Update the title of an existing todo",
@@ -222,11 +261,15 @@ function createServer() {
         }
     );
 
+
     return server;
 }
 
 
-// MCP endpoint
+// =========================
+// MCP ENDPOINT
+// =========================
+
 app.all("/", async (req, res) => {
     const server = createServer();
 
@@ -259,12 +302,20 @@ app.all("/", async (req, res) => {
 });
 
 
-// Health check
+// =========================
+// HEALTH CHECK
+// =========================
+
 app.get("/health", (req, res) => {
     res.json({
         status: "ok",
         server: "todo-http-server",
     });
 });
+
+
+// =========================
+// VERCEL EXPORT
+// =========================
 
 export default app;
