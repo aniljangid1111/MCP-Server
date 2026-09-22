@@ -1,0 +1,23 @@
+{
+  "manifest_version": "0.3",
+  "name": "todo-server",
+  "display_name": "Todo MCP Server",
+  "version": "1.0.0",
+  "description": "A simple MCP server for managing todos.",
+
+  "author": {
+    "name": "Anil"
+  },
+
+  "server": {
+    "type": "node",
+    "entry_point": "index.js",
+
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/index.js"
+      ]
+    }
+  }
+}
