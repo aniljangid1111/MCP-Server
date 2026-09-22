@@ -319,3 +319,9 @@ app.get("/health", (req, res) => {
 // =========================
 
 export default app;
+
+if (process.env.VERCEL !== "1") {
+    app.listen(3000, () => {
+        console.log("MCP HTTP server listening on http://localhost:3000");
+    });
+}
